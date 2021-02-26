@@ -1,0 +1,145 @@
+---
+title: "Task 3 - Text Analysis"
+author: "Logan Kozal"
+date: "2/25/2021"
+output: 
+  html_document:
+    code_folding: hide
+---
+# Text analysis of the US Consitution by Article
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(tidytext)
+library(textdata)
+library(pdftools)
+library(ggwordcloud)
+```
+PDF of consititution courtsey of United States Goverment Printing Office
+```{r}
+constitution <- pdf_text("constitution.pdf")
+
+constitution_tidy <- data.frame(constitution) %>% 
+  mutate(full_text = str_split(constitution, pattern = "\\n")) %>% 
+  unnest(full_text) %>% 
+  mutate(full_text = str_trim(full_text))
+
+```
+
+```{r, results = "hide"}
+constitution_df <- constitution_tidy %>% 
+    slice(-(518:601)) %>% 
+  mutate(article = case_when(
+    str_detect(full_text, pattern = "Article.") ~ full_text, 
+    TRUE ~ NA_character_
+  ))%>% 
+  fill(article) %>% 
+  separate(col = article, into = c("article", "no"), sep = ". ")
+```
+```{r, results = "hide"}
+con_tokens <- constitution_df %>% 
+  unnest_tokens(word, full_text) %>% 
+  dplyr::select(-constitution)
+
+con_word_count <- con_tokens %>% 
+  count(no, word)
+
+# I can't figure out why this didnt remove all my numbers when it did remove some...
+df <- tribble(~word, 
+              "1", 
+              "2", 
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8",
+              "9",
+              "10",
+              "1 ", 
+              "2 ", 
+              "3 ",
+              "4 ",
+              "5 ",
+              "6 ",
+              "7 ",
+              "8 ",
+              "9 ",
+              "10 ",
+              " 1", 
+              " 2", 
+              " 3",
+              " 4",
+              " 5",
+              " 6",
+              " 7",
+              " 8",
+              " 9",
+              " 10")
+
+
+con_nonstop_words <- con_tokens %>% 
+  anti_join(stop_words) %>% 
+  anti_join(df)
+
+nonstop_counts <- con_nonstop_words %>% 
+  count(no, word)
+
+nonstop_counts
+```
+
+```{r, results = "hide"}
+con_tokens <- constitution_df %>% 
+  unnest_tokens(word, full_text) %>% 
+  dplyr::select(-constitution)
+
+con_word_count <- con_tokens %>% 
+  count(word)
+
+con_nonstop_words <- con_tokens %>% 
+  anti_join(stop_words)
+
+nonstop_counts <- con_nonstop_words %>% 
+  count(word)
+
+nonstop_counts
+```
+
+## Word Cloud of Most Common Words
+```{r, results = "hide"}
+top100 <- nonstop_counts %>% 
+  arrange(-n) %>% 
+  slice(1:100)
+
+con_cloud <- ggplot(data = top100, aes(label = word)) +
+  geom_text_wordcloud(aes(color=n, size=n, shape="star"))+
+  scale_size_area(max_size=10)+
+  scale_color_gradient(low = "blue", high = "red")
+  
+
+con_cloud
+```
+
+
+## Sentiments by Article
+
+
+
+```{r}
+con_nrc <- con_nonstop_words %>% 
+  inner_join(get_sentiments("nrc")) %>% 
+  filter(no != "firs") %>% 
+  filter(no != "Ta") %>% 
+  rename(Article = no)
+
+con_nrc_counts <- con_nrc %>% 
+  count(Article, sentiment)
+
+ggplot(data = con_nrc_counts, aes(x= sentiment, y= n))+
+  geom_col()+
+  facet_wrap(~Article)+
+  coord_flip()+
+  labs(y="number of words", title = "Sentiments expressed in each article")
+
+```
+

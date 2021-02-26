@@ -1,0 +1,66 @@
+---
+title: "Task 2"
+author: "Logan Kozal"
+date: "2/25/2021"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+Data: Kaschner, K., Rius-Barile, J., Kesner-Reyes, K., Garilao, C., Kullander, S., Rees, T., & Froese, R. (2016). AquaMaps: Predicted range maps for aquatic species. www.aquamaps.org 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(raster) 
+library(tidyverse)
+library(here)
+library(sf)
+library(rnaturalearth)
+library(janitor)
+```
+
+## Read in cetaceans raster stack
+```{r}
+my_files <- list.files(path = here::here("ca_cetaceans"), full.names = TRUE)
+
+# read in all layers as stack
+ca_stack <- raster::stack(my_files)
+ca_stack
+```
+
+## Set a probability threshold above which a species is considered "present" and calculate species richness
+```{r}
+#set probability over a given threshold to presence
+is_present <- function(x, threshold = 0.8) {
+  y <- ifelse(x >= threshold, 1, NA)
+  return(y)
+}
+
+prob_stack <- calc(ca_stack, fun = is_present)
+
+# add up all indiviudual species presence/absence
+spp_rich <- calc(ca_stack, fun = sum, na.rm =TRUE)
+
+```
+
+## Plot cetacean species richness 
+```{r}
+#convert raster to dataframe to use with ggplot
+species_rich_df <- raster::rasterToPoints(spp_rich) %>%
+  as.data.frame() 
+
+#get land outline from natural earth 
+ca_land <- ne_download(scale = 110, type = 'land', category = 'physical', returnclass = "sf")
+
+#plot ca outline on top of "raster"
+ggplot() +
+  geom_raster(data = species_rich_df, aes(x = x, y = y, fill = layer))+
+  labs(x = "longitude", y= "latitude", fill = "cetacean species richness", caption = "a probability threshold of 0.8 from Aquamaps predicted range maps for aquatic  \n species was used to determine presence of a species in a given area")+
+  coord_sf(expand = 0) +
+  scale_fill_gradient(low = 'black', high = 'white') +
+  theme_bw()+
+  geom_sf(data = ca_land, color = 'grey', fill = 'black')+
+  coord_sf(xlim=c(-125,-115), ylim=c(32,38))
+
+```
+
